@@ -1,4 +1,5 @@
 from django.db import models
 
+
 class Event(models.Model):
-    name = models.CharField(verbose_name='Name', max_length=512)
+    name = models.CharField(verbose_name='Name', unique=True, max_length=512)
