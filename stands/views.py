@@ -1,14 +1,18 @@
 import numpy as np
 import os
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.response import Response
 import cv2
 
 from stands.serializers import StandDetailSerializer, StandListSerializer, ImageSerializer
 from stands.models import Stand
-from .recognizer.emotion_detect import Emotion
-from .recognizer.person_detect import Person
-from .recognizer.face_detect import faces
+from emotionTypes.models import EmotionTypes
+from matches.models import Match
+from infoPoints.models import InfoPoint
+from persons.models import Person
+from .recognizer.emotion_detect import EmotionRecognizer
+from .recognizer.person_detect import PersonRecognizer
+from .recognizer.face_detect import FaceRecognizer
 
 
 class StandCreateView(generics.CreateAPIView):
@@ -32,14 +36,14 @@ class ImageRecognizeView(generics.CreateAPIView):
     def post(self, request):
         serializer = ImageSerializer(data=request.data)
         if serializer.is_valid():
-            frame = cv2.imdecode(np.fromstring(serializer.validated_data['image'].read(), np.uint8), cv2.IMREAD_UNCHANGED)
+            stand = Stand.objects.get(id=serializer.data['stand'])
+            frame = cv2.imdecode(np.fromstring(serializer.validated_data['image'].read(), np.uint8),
+                                 cv2.IMREAD_UNCHANGED)
             rgbImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             h, w, ch = rgbImage.shape
-            face_list = faces(frame)
-            emotion = Emotion()
-            person = Person()
-            text = ""
-            name = ""
+            face_recognizer = FaceRecognizer.get_instance()
+            face_list = face_recognizer.faces(frame)
+
             for i in range(0, face_list.shape[2]):
                 confidence = face_list[0, 0, i, 2]
                 if confidence > 0.5:
@@ -52,18 +56,71 @@ class ImageRecognizeView(generics.CreateAPIView):
                     if fW < 20 or fH < 20:
                         continue
 
-                    #person_text, name = person.person(face=face)
-                    emotion_text = emotion.emotion(face=face)
-                    text = emotion_text
+                    cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
                     y = startY - 10 if startY - 10 > 10 else startY + 10
-                    cv2.rectangle(frame, (startX, startY), (endX, endY),
-                                  (0, 255, 0), 2)
-                    cv2.rectangle(rgbImage, (startX, startY), (endX, startY - 44), (0, 255, 0), cv2.FILLED)
-                    #cv2.putText(rgbImage, person_text, (startX, y - 16),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
-                    cv2.putText(rgbImage, emotion_text, (startX, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
-                print(name+" "+text)
-                #os.chdir(r'C:\Users\gavri\Desktop\фото')
-                #cv2.imwrite("image.jpg", rgbImage)
-            return Response(serializer.data)
+                    if stand.person:
+                        match = Match()
+                        match.standID = stand
 
+                        person_recognizer = PersonRecognizer.get_instance()
+                        person_text, text = person_recognizer.person(face=face)
 
+                        name = text.split()
+
+                        if len(name) == 2:
+                            person = Person.objects.get(name=name[0], surname=name[1])
+                        else:
+                            if len(name) == 1:
+                                try:
+                                    person = Person.objects.get(name=name[0], surname=None)
+                                except Exception:
+                                    person = None
+                        if person:
+                            match.personId = person
+                            print(person_text)
+                            cv2.rectangle(frame, (startX, startY), (endX, startY - 44), (0, 255, 0), cv2.FILLED)
+                            cv2.putText(frame, person_text, (startX, y - 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0),
+                                        2)
+
+                            if stand.emotion:
+                                emotion = EmotionRecognizer.get_instance()
+                                emotion_id, emotion_percent = emotion.emotion(face=face)
+                                emotion_type = EmotionTypes.objects.get(emotion_number=emotion_id)
+                                cv2.putText(frame, emotion_type.name + " (" + emotion_percent + ")", (startX, y),
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                                            (0, 0, 0), 2)
+                                match.emotionId = emotion_type
+                                print(emotion_type.name + " (" + emotion_percent + ")")
+
+                            match.save()
+                            # os.chdir(r'C:\Users\gavri\Desktop\фото')
+                            # cv2.imwrite("image.jpg", frame)
+                    else:
+                        info_point = InfoPoint()
+                        info_point.standId = stand
+                        cv2.rectangle(frame, (startX, startY), (endX, startY - 44), (0, 255, 0), cv2.FILLED)
+
+                        if stand.emotion:
+                            emotion = EmotionRecognizer.get_instance()
+                            emotion_id, emotion_percent = emotion.emotion(face=face)
+                            emotion_type = EmotionTypes.objects.get(emotion_number=emotion_id)
+                            cv2.putText(frame, emotion_type.name+" ("+emotion_percent+")", (startX, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                                       (0, 0, 0), 2)
+                            info_point.emotionTypeID = emotion_type
+                            print(emotion_type.name+" ("+emotion_percent+")")
+
+                        if stand.age:
+                            info_point.age = 69
+                            print(info_point.age)
+                            pass
+
+                        if stand.sex:
+                            info_point.sex = InfoPoint.SEXES(1)
+                            print(info_point.sex)
+                            pass
+
+                        info_point.save()
+                        # os.chdir(r'C:\Users\gavri\Desktop\фото')
+                        # cv2.imwrite("image.jpg", frame)
+            return Response(status=status.HTTP_200_OK)
+        return Response(status=status.HTTP_400_BAD_REQUEST)
