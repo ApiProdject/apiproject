@@ -5,14 +5,26 @@ import pickle
 from apiproject.settings import STATIC_DIR
 
 
-class Person():
+class PersonRecognizer:
+    __instance__ = None
+
+    @staticmethod
+    def get_instance():
+        if not PersonRecognizer.__instance__:
+            PersonRecognizer()
+        return PersonRecognizer.__instance__
+
     def __init__(self):
-        self.embedder = cv2.dnn.readNetFromTorch(os.path.join(STATIC_DIR,
-                                                     "models/openface_nn4.small2.v1.t7"))
-        self.recognizer = pickle.loads(open(os.path.join(STATIC_DIR,
-                                                     "models/recognizer.pickle"), "rb").read())
-        self.le = pickle.loads(open(os.path.join(STATIC_DIR,
+        if PersonRecognizer.__instance__ is None:
+            self.embedder = cv2.dnn.readNetFromTorch(os.path.join(STATIC_DIR,
+                                                                  "models/openface_nn4.small2.v1.t7"))
+            self.recognizer = pickle.loads(open(os.path.join(STATIC_DIR,
+                                                             "models/recognizer.pickle"), "rb").read())
+            self.le = pickle.loads(open(os.path.join(STATIC_DIR,
                                                      "models/le.pickle"), "rb").read())
+            PersonRecognizer.__instance__ = self
+        else:
+            raise Exception("This class is a singleton!")
 
     def person(self, face):
         faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,
