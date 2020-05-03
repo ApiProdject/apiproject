@@ -8,3 +8,4 @@ class Stand(models.Model):
     age = models.BooleanField(verbose_name='age')
     sex = models.BooleanField(verbose_name='sex')
     people = models.BooleanField(verbose_name='people')
+    description = models.CharField(verbose_name='description', max_length=512)

@@ -5,7 +5,7 @@ from stands.models import Stand
 class StandListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stand
-        fields = ('person', 'emotion', 'age', 'sex', 'people')
+        fields = ('person', 'emotion', 'age', 'sex', 'people', 'description', 'id', 'eventId')
 
 
 class StandDetailSerializer(serializers.ModelSerializer):
