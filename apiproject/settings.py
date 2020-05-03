@@ -39,7 +39,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'rest_framework.authtoken',
     'users',
     'persons',
     'photos',
@@ -148,4 +147,5 @@ CORS_ORIGIN_ALLOW_ALL = True
 
 STATIC_URL = '/static/'
 
+STATIC_DIR = os.path.join(BASE_DIR, 'static')
 
