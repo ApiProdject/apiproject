@@ -165,7 +165,6 @@ class SSR_net:
 
         model = Model(inputs=inputs, outputs=pred_a)
 
-        model.save('age.h5')
         return model
 
 class SSR_net_general:
@@ -312,6 +311,4 @@ class SSR_net_general:
 
         model = Model(inputs=inputs, outputs=pred)
 
-
-        model.save('gender.h5')
         return model
