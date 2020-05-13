@@ -1,3 +1,5 @@
+import base64
+
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 
@@ -8,9 +10,8 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 import cv2
 
-from stands.serializers import StandDetailSerializer, StandListSerializer, ImageSerializer
+from stands.serializers import StandDetailSerializer, StandListSerializer, ImageSerializer, StandOwnerListSerializer
 from stands.models import Stand
-from stands.serializers import StandListSerializer
 
 from user_stands.models import UserStand
 from user_stands.serializers import UserStandListSerializer
@@ -23,11 +24,28 @@ from persons.models import Person
 from .recognizer.emotion_detect import EmotionRecognizer
 from .recognizer.person_detect import PersonRecognizer
 from .recognizer.face_detect import FaceRecognizer
+from .recognizer.age_detect import AgeRecognizer
+from .recognizer.gender_detect import GenderRecognizer
+
 
 
 class StandCreateView(generics.CreateAPIView):
+    permission_classes = (IsAuthenticated,)
+
     serializer_class = StandDetailSerializer
 
+    def post(self, request):
+        userName = request.user
+        serializer = StandDetailSerializer(data=request.data)
+        if serializer.is_valid():
+            stand = serializer.save()
+            user_stand = UserStand()
+            user_stand.standId = stand
+            user_stand.owner = User.objects.filter(login=userName)[0]
+            user_stand.save()
+            return Response(StandOwnerListSerializer(stand).data, status=status.HTTP_201_CREATED)
+        else:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class StandListView(generics.ListAPIView):
     serializer_class = StandListSerializer
@@ -57,9 +75,36 @@ class StandByEventView(generics.ListAPIView):
         return Response(stands, status=status.HTTP_200_OK)
 
 
+class StandByUserView(generics.ListAPIView):
+    permission_classes = (IsAuthenticated,)
+
+    serializer_class = StandListSerializer
+
+    def get(self, request):
+        stands = []
+        userName = request.user
+        userId = UserListSerializer(User.objects.filter(login=userName), many=True).data[0]['id']
+        userStands = UserStandListSerializer(UserStand.objects.filter(owner=userId), many=True).data
+        for userStand in userStands:
+            stands.append(StandOwnerListSerializer(Stand.objects.filter(id=userStand['standId']), many=True).data[0])
+
+        return Response(stands, status=status.HTTP_200_OK)
+
+
 class StandDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = StandDetailSerializer
     queryset = Stand.objects.all()
+
+
+def to_base64(img):
+    _, buf = cv2.imencode(".png", img)
+    return base64.b64encode(buf)
+
+
+def from_base64(buf):
+    buf_decode = base64.b64decode(buf)
+    buf_arr = np.fromstring(buf_decode, dtype=np.uint8)
+    return cv2.imdecode(buf_arr, cv2.IMREAD_UNCHANGED)
 
 
 class ImageRecognizeView(generics.CreateAPIView):
@@ -70,8 +115,7 @@ class ImageRecognizeView(generics.CreateAPIView):
         serializer = ImageSerializer(data=request.data)
         if serializer.is_valid():
             stand = Stand.objects.get(id=serializer.data['stand'])
-            frame = cv2.imdecode(np.fromstring(serializer.validated_data['image'].read(), np.uint8),
-                                 cv2.IMREAD_UNCHANGED)
+            frame = from_base64(serializer.data['image'])
             rgbImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             h, w, ch = rgbImage.shape
             face_recognizer = FaceRecognizer.get_instance()
@@ -137,23 +181,31 @@ class ImageRecognizeView(generics.CreateAPIView):
                             emotion = EmotionRecognizer.get_instance()
                             emotion_id, emotion_percent = emotion.emotion(face=face)
                             emotion_type = EmotionTypes.objects.get(emotion_number=emotion_id)
-                            cv2.putText(frame, emotion_type.name+" ("+emotion_percent+")", (startX, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                                       (0, 0, 0), 2)
+                            cv2.putText(frame, emotion_type.name + " (" + emotion_percent + ")", (startX, y),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                                        (0, 0, 0), 2)
                             info_point.emotionTypeID = emotion_type
-                            print(emotion_type.name+" ("+emotion_percent+")")
+                            print(emotion_type.name + " (" + emotion_percent + ")")
 
+                        text = ''
                         if stand.age:
-                            info_point.age = 69
+                            age_recognizer = AgeRecognizer.get_instance()
+                            age = age_recognizer.age(face=face)
+                            info_point.age = age
+                            text = str(info_point.age)+', '
                             print(info_point.age)
-                            pass
 
                         if stand.sex:
-                            info_point.sex = InfoPoint.SEXES(1)
-                            print(info_point.sex)
-                            pass
+                            sex_recognizer = GenderRecognizer.get_instance()
+                            sex = sex_recognizer.gender(face=face)
+                            info_point.sex = sex
+                            text += str(info_point.SEXES[sex-1][1])
+                            print(info_point.SEXES[sex-1][1])
 
+                        cv2.putText(frame, text, (startX, y - 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
                         info_point.save()
                         # os.chdir(r'C:\Users\gavri\Desktop\фото')
                         # cv2.imwrite("image.jpg", frame)
-            return Response(status=status.HTTP_200_OK)
+
+            return Response(to_base64(frame), status=status.HTTP_200_OK)
         return Response(status=status.HTTP_400_BAD_REQUEST)
