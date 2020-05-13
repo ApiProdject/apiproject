@@ -24,5 +24,6 @@ urlpatterns = [
     path('api/v1/infopoints/', include('infoPoints.urls')),
     path('api/v1/matches/', include('matches.urls')),
     path('api/v1/people/', include('persons.urls')),
+    path('api/v1/users/', include('users.urls')),
     path('api-token-auth/', obtain_auth_token, name='api_token_auth'),  # <-- And here
 ]
