@@ -17,6 +17,7 @@ class StandOwnerListSerializer(serializers.ModelSerializer):
         model = Stand
         fields = '__all__'
 
+
 class StandDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stand
@@ -26,13 +27,3 @@ class StandDetailSerializer(serializers.ModelSerializer):
 class ImageSerializer(serializers.Serializer):
     image = serializers.CharField()
     stand = serializers.PrimaryKeyRelatedField(queryset=Stand.objects.all())
-
-
-class OwnerStandsSerializer(serializers.ModelSerializer):
-    event = EventListSerializer(read_only=True)
-    child_id = serializers.PrimaryKeyRelatedField(
-        queryset=Event.objects.all(), source='event', write_only=True)
-
-    class Meta:
-        model = Stand
-        fields = ('id', 'description', 'event')
