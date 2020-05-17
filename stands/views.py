@@ -134,7 +134,19 @@ class ImageRecognizeView(generics.CreateAPIView):
                         continue
 
                     cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
+                    cv2.rectangle(frame, (startX, startY), (endX, startY - 66), (0, 255, 0), cv2.FILLED)
                     y = startY - 10 if startY - 10 > 10 else startY + 10
+
+                    emotion_type = None
+                    if stand.emotion:
+                        emotion = EmotionRecognizer.get_instance()
+                        emotion_id, emotion_percent = emotion.emotion(face=face)
+                        emotion_type = EmotionTypes.objects.get(emotion_number=emotion_id)
+                        cv2.putText(frame, emotion_type.name + " (" + emotion_percent + ")", (startX, y),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                                    (0, 0, 0), 2)
+                        print(emotion_type.name + " (" + emotion_percent + ")")
+
                     if stand.person:
                         match = Match()
                         match.standID = stand
@@ -155,57 +167,41 @@ class ImageRecognizeView(generics.CreateAPIView):
                         if person:
                             match.personId = person
                             print(person_text)
-                            cv2.rectangle(frame, (startX, startY), (endX, startY - 44), (0, 255, 0), cv2.FILLED)
                             cv2.putText(frame, person_text, (startX, y - 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0),
                                         2)
 
                             if stand.emotion:
-                                emotion = EmotionRecognizer.get_instance()
-                                emotion_id, emotion_percent = emotion.emotion(face=face)
-                                emotion_type = EmotionTypes.objects.get(emotion_number=emotion_id)
-                                cv2.putText(frame, emotion_type.name + " (" + emotion_percent + ")", (startX, y),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                                            (0, 0, 0), 2)
                                 match.emotionId = emotion_type
-                                print(emotion_type.name + " (" + emotion_percent + ")")
 
-                            match.save()
+                            # match.save()
                             # os.chdir(r'C:\Users\gavri\Desktop\фото')
                             # cv2.imwrite("image.jpg", frame)
-                    else:
-                        info_point = InfoPoint()
-                        info_point.standId = stand
-                        cv2.rectangle(frame, (startX, startY), (endX, startY - 44), (0, 255, 0), cv2.FILLED)
+                    info_point = InfoPoint()
+                    info_point.standId = stand
 
-                        if stand.emotion:
-                            emotion = EmotionRecognizer.get_instance()
-                            emotion_id, emotion_percent = emotion.emotion(face=face)
-                            emotion_type = EmotionTypes.objects.get(emotion_number=emotion_id)
-                            cv2.putText(frame, emotion_type.name + " (" + emotion_percent + ")", (startX, y),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                                        (0, 0, 0), 2)
-                            info_point.emotionTypeID = emotion_type
-                            print(emotion_type.name + " (" + emotion_percent + ")")
+                    if stand.emotion:
+                        info_point.emotionTypeID = emotion_type
 
-                        text = ''
-                        if stand.age:
-                            age_recognizer = AgeRecognizer.get_instance()
-                            age = age_recognizer.age(face=face)
-                            info_point.age = age
-                            text = str(info_point.age)+', '
-                            print(info_point.age)
+                    text = ''
+                    if stand.age:
+                        age_recognizer = AgeRecognizer.get_instance()
+                        age = age_recognizer.age(face=face)
+                        info_point.age = age
+                        text = str(info_point.age) + ', '
+                        print(info_point.age)
 
-                        if stand.sex:
-                            sex_recognizer = GenderRecognizer.get_instance()
-                            sex = sex_recognizer.gender(face=face)
-                            info_point.sex = sex
-                            text += str(info_point.SEXES[sex-1][1])
-                            print(info_point.SEXES[sex-1][1])
+                    if stand.sex:
+                        sex_recognizer = GenderRecognizer.get_instance()
+                        sex = sex_recognizer.gender(face=face)
+                        info_point.sex = sex
+                        text += str(info_point.SEXES[sex - 1][1])
+                        print(info_point.SEXES[sex - 1][1])
 
-                        cv2.putText(frame, text, (startX, y - 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
-                        info_point.save()
-                        # os.chdir(r'C:\Users\gavri\Desktop\фото')
-                        # cv2.imwrite("image.jpg", frame)
+                    cv2.putText(frame, text, (startX, y - 32), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+                    # info_point.save()
+                    # os.chdir(r'C:\Users\gavri\Desktop\фото')
+                    # cv2.imwrite("image.jpg", frame)
+
 
             return Response(to_base64(frame), status=status.HTTP_200_OK)
         return Response(status=status.HTTP_400_BAD_REQUEST)
